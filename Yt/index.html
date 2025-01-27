@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sentiment Analyzer for YouTube Videos</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: "Poppins", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: url('background.jpeg') no-repeat center center fixed;
+      background-size: cover;
+      color: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .container {
+      width: 90%;
+      max-width: 1000px;
+      background: rgba(30, 30, 30, 0.9);
+      padding: 20px;
+      border-radius: 15px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      color: #ff6581;
+    }
+
+    input {
+      width: 80%;
+      padding: 10px;
+      font-size: 1rem;
+      margin: 20px 0;
+      border-radius: 8px;
+      border: none;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #ff758c;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      border-radius: 8px;
+    }
+
+    button:hover {
+      background-color: #ff5672;
+    }
+
+    .results {
+      display: none; /* Initially hidden */
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-top: 20px;
+      gap: 20px; /* Adds space between blocks */
+    }
+
+    .block {
+      width: 48%;
+      background: rgba(50, 50, 50, 0.8);
+      padding: 15px;
+      border-radius: 10px;
+    }
+
+    .block h2 {
+      font-size: 1.5rem;
+      margin-bottom: 15px;
+    }
+
+    canvas {
+      margin-top: 20px;
+    }
+
+    .block p {
+      margin: 10px 0;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      margin: 10px 0;
+    }
+
+    .slider-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .slider-container label {
+      flex: 1;
+      text-align: left;
+    }
+
+    .slider-container input {
+      flex: 2;
+    }
+
+    .slider-container span {
+      flex: 1;
+      text-align: right;
+    }
+
+    .topics-section {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(50, 50, 50, 0.8);
+      border-radius: 10px;
+    }
+
+    .topics-section h2 {
+      font-size: 1.5rem;
+      margin-bottom: 15px;
+      color: #ff6581;
+    }
+
+    .topics-section ul {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .topics-section li {
+      margin: 10px 0;
+      font-size: 1rem;
+      background: rgba(70, 70, 70, 0.9);
+      padding: 10px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Analyze YouTube Video Sentiments</h1>
+    <input type="text" id="youtube-url" placeholder="Paste YouTube video link here">
+    <button onclick="analyzeVideo()">Start Analysis</button>
+    <div id="results" class="results">
+      <div id="sentiment-analysis" class="block">
+        <h2>Sentiment Overview</h2>
+        <canvas id="sentiment-chart"></canvas>
+      </div>
+      <div id="video-statistics" class="block">
+        <h2>Video Insights</h2>
+        <div class="slider-container">
+          <label for="views-slider">Total Views:</label>
+          <input id="views-slider" type="range" min="0" max="100" value="0" disabled>
+          <span id="views-value">--</span>
+        </div>
+        <div class="slider-container">
+          <label for="likes-slider">Total Likes:</label>
+          <input id="likes-slider" type="range" min="0" max="100" value="0" disabled>
+          <span id="likes-value">--</span>
+        </div>
+        <div class="slider-container">
+          <label for="comments-slider">Total Comments:</label>
+          <input id="comments-slider" type="range" min="0" max="100" value="0" disabled>
+          <span id="comments-value">--</span>
+        </div>
+      </div>
+    </div>
+    <div id="topics-section" class="topics-section" style="display: none;">
+      <h2>Recommended Topics</h2>
+      <ul id="topic-list">
+        <!-- Topics will be dynamically inserted here -->
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    async function analyzeVideo() {
+      const url = document.getElementById("youtube-url").value;
+
+      // Hide the results section initially
+      const resultsDiv = document.getElementById("results");
+      resultsDiv.style.display = "none";
+
+      const topicsSection = document.getElementById("topics-section");
+      topicsSection.style.display = "none";
+
+      // Reset the chart and text placeholders
+      document.getElementById("views-value").textContent = "--";
+      document.getElementById("likes-value").textContent = "--";
+      document.getElementById("comments-value").textContent = "--";
+
+      const sentimentChart = Chart.getChart("sentiment-chart");
+      if (sentimentChart) sentimentChart.destroy();
+
+      const topicList = document.getElementById("topic-list");
+      topicList.innerHTML = ""; // Clear previous topics
+
+      try {
+        const response = await fetch("http://127.0.0.1:5000/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+
+        const data = await response.json();
+        if (data.error) {
+          alert(`Error: ${data.error}`);
+          return;
+        }
+
+        const { statistics, sentiments, topics } = data;
+
+        // Update Video Statistics Sliders
+        document.getElementById("views-slider").min = 0;
+        document.getElementById("views-slider").max = statistics.views * 2;
+        document.getElementById("views-slider").value = statistics.views;
+        document.getElementById("views-value").textContent = statistics.views;
+
+        document.getElementById("likes-slider").min = 0;
+        document.getElementById("likes-slider").max = statistics.likes * 2;
+        document.getElementById("likes-slider").value = statistics.likes;
+        document.getElementById("likes-value").textContent = statistics.likes;
+
+        document.getElementById("comments-slider").min = 0;
+        document.getElementById("comments-slider").max = statistics.comments * 2;
+        document.getElementById("comments-slider").value = statistics.comments;
+        document.getElementById("comments-value").textContent = statistics.comments;
+
+        // Create Sentiment Chart
+        const ctx = document.getElementById("sentiment-chart").getContext("2d");
+        new Chart(ctx, {
+          type: "pie",
+          data: {
+            labels: ["Positive", "Negative", "Neutral"],
+            datasets: [
+              {
+                label: "Sentiments",
+                data: [sentiments.positive, sentiments.negative, sentiments.neutral],
+                backgroundColor: ["#4caf50", "#f44336", "#ffc107"],
+                borderColor: ["#4caf50", "#f44336", "#ffc107"],
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: "top",
+              },
+            },
+          },
+        });
+
+        // Display Recommended Topics
+        topics.forEach((topic) => {
+          const listItem = document.createElement("li");
+          listItem.textContent = topic;
+          topicList.appendChild(listItem);
+        });
+
+        topicsSection.style.display = "block"; // Show topics section
+        resultsDiv.style.display = "flex"; // Show results
+      } catch (error) {
+        alert(`Error: ${error.message}`);
+      }
+    }
+  </script>
+</body>
+</html>
